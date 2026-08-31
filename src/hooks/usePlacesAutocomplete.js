@@ -1,14 +1,17 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Loader } from '@googlemaps/js-api-loader'
+import { setOptions, importLibrary } from '@googlemaps/js-api-loader'
 
-let loaderPromise = null
+let initPromise = null
 
-function loadMaps(apiKey) {
-  if (!loaderPromise) {
-    const loader = new Loader({ apiKey, version: 'weekly', libraries: ['places'] })
-    loaderPromise = loader.load()
+function initMaps(apiKey) {
+  if (!initPromise) {
+    setOptions({ apiKey, version: 'weekly' })
+    initPromise = importLibrary('places').catch(err => {
+      initPromise = null
+      throw err
+    })
   }
-  return loaderPromise
+  return initPromise
 }
 
 export function usePlacesAutocomplete() {
@@ -18,12 +21,14 @@ export function usePlacesAutocomplete() {
   const debounceRef = useRef(null)
   const [suggestions, setSuggestions] = useState([])
 
-  // Load Maps SDK + get current position once
   useEffect(() => {
     if (!apiKey) return
-    loadMaps(apiKey).then(() => {
-      serviceRef.current = new window.google.maps.places.AutocompleteService()
-    })
+    initMaps(apiKey)
+      .then(() => {
+        serviceRef.current = new window.google.maps.places.AutocompleteService()
+      })
+      .catch(err => console.warn('Google Maps Places non disponibile:', err))
+
     navigator.geolocation?.getCurrentPosition(pos => {
       locationRef.current = { lat: pos.coords.latitude, lng: pos.coords.longitude }
     })
@@ -37,19 +42,16 @@ export function usePlacesAutocomplete() {
     }
     debounceRef.current = setTimeout(() => {
       const request = { input, types: ['establishment'] }
-      if (locationRef.current) {
+      if (locationRef.current && window.google?.maps) {
         request.location = new window.google.maps.LatLng(
           locationRef.current.lat,
           locationRef.current.lng
         )
-        request.radius = 2000 // 2 km
+        request.radius = 2000
       }
       serviceRef.current.getPlacePredictions(request, (predictions, status) => {
-        if (status === window.google.maps.places.PlacesServiceStatus.OK && predictions) {
-          setSuggestions(predictions.slice(0, 5))
-        } else {
-          setSuggestions([])
-        }
+        const OK = window.google.maps.places.PlacesServiceStatus.OK
+        setSuggestions(status === OK && predictions ? predictions.slice(0, 5) : [])
       })
     }, 300)
   }, [])

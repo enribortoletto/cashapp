@@ -106,7 +106,7 @@ export default function App() {
       .select('amount')
       .eq('user_id', uid)
       .eq('month', month)
-      .single()
+      .maybeSingle()
     setBudget(data?.amount ?? null)
   }
 
@@ -126,7 +126,7 @@ export default function App() {
       .select('id')
       .eq('user_id', uid)
       .eq('month', month)
-      .single()
+      .maybeSingle()
     if (existing) return
 
     const templates = recurring
