@@ -19,6 +19,7 @@ export default function App() {
   const [expenses, setExpenses] = useState([])        // for displayMonth
   const [categories, setCategories] = useState([])    // all user categories
   const [budget, setBudget] = useState(null)          // number or null
+  const [budgetIsGlobal, setBudgetIsGlobal] = useState(false)
   const [recurring, setRecurring] = useState([])      // recurring templates
 
   // UI
@@ -101,13 +102,19 @@ export default function App() {
   }
 
   async function loadBudget(uid, month) {
-    const { data } = await supabase
-      .from('budgets')
-      .select('amount')
-      .eq('user_id', uid)
-      .eq('month', month)
-      .maybeSingle()
-    setBudget(data?.amount ?? null)
+    const { data: specific } = await supabase
+      .from('budgets').select('amount')
+      .eq('user_id', uid).eq('month', month).maybeSingle()
+    if (specific) {
+      setBudget(specific.amount)
+      setBudgetIsGlobal(false)
+      return
+    }
+    const { data: global } = await supabase
+      .from('budgets').select('amount')
+      .eq('user_id', uid).eq('month', '__global__').maybeSingle()
+    setBudget(global?.amount ?? null)
+    setBudgetIsGlobal(!!global)
   }
 
   async function loadRecurring(uid) {
@@ -238,11 +245,38 @@ export default function App() {
   }
 
   // ── BUDGET ────────────────────────────────────────────────────────
-  async function handleBudgetSave(amount) {
-    await supabase.from('budgets')
-      .upsert({ user_id: user.id, month: displayMonth, amount }, { onConflict: 'user_id,month' })
+  async function handleBudgetSave(amount, isGlobal) {
+    const uid = user.id
+    if (isGlobal) {
+      await supabase.from('budgets')
+        .upsert({ user_id: uid, month: '__global__', amount }, { onConflict: 'user_id,month' })
+      // Rimuovi eventuale override mensile
+      await supabase.from('budgets').delete().eq('user_id', uid).eq('month', displayMonth)
+      setBudgetIsGlobal(true)
+    } else {
+      await supabase.from('budgets')
+        .upsert({ user_id: uid, month: displayMonth, amount }, { onConflict: 'user_id,month' })
+      setBudgetIsGlobal(false)
+    }
     setBudget(amount)
     showToast('Budget salvato')
+  }
+
+  async function handleBudgetDelete() {
+    const uid = user.id
+    if (budgetIsGlobal) {
+      await supabase.from('budgets').delete().eq('user_id', uid).eq('month', '__global__')
+      setBudget(null)
+      setBudgetIsGlobal(false)
+    } else {
+      await supabase.from('budgets').delete().eq('user_id', uid).eq('month', displayMonth)
+      // Verifica se esiste budget globale come fallback
+      const { data: global } = await supabase.from('budgets').select('amount')
+        .eq('user_id', uid).eq('month', '__global__').maybeSingle()
+      setBudget(global?.amount ?? null)
+      setBudgetIsGlobal(!!global)
+    }
+    showToast('Budget eliminato')
   }
 
   // ── MONTH NAVIGATION ──────────────────────────────────────────────
@@ -298,7 +332,7 @@ export default function App() {
         <MonthNav month={displayMonth} onPrev={goToPrev} onNext={goToNext} />
 
         {/* Budget */}
-        <BudgetCard budget={budget} spent={total} onSave={handleBudgetSave} />
+        <BudgetCard budget={budget} spent={total} isGlobal={budgetIsGlobal} onSave={handleBudgetSave} onDelete={handleBudgetDelete} />
 
         {/* Total */}
         <TotalCard total={total} count={expenses.length} onClick={() => setModalOpen(true)} />
