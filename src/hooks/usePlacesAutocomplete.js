@@ -1,32 +1,30 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { setOptions, importLibrary } from '@googlemaps/js-api-loader'
 
-let initPromise = null
+let libPromise = null
 
-function initMaps(apiKey) {
-  if (!initPromise) {
+function loadPlaces(apiKey) {
+  if (!libPromise) {
     setOptions({ apiKey, version: 'weekly' })
-    initPromise = importLibrary('places').catch(err => {
-      initPromise = null
+    libPromise = importLibrary('places').catch(err => {
+      libPromise = null
       throw err
     })
   }
-  return initPromise
+  return libPromise
 }
 
 export function usePlacesAutocomplete() {
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
-  const serviceRef = useRef(null)
+  const libRef = useRef(null)
   const locationRef = useRef(null)
   const debounceRef = useRef(null)
   const [suggestions, setSuggestions] = useState([])
 
   useEffect(() => {
     if (!apiKey) return
-    initMaps(apiKey)
-      .then(() => {
-        serviceRef.current = new window.google.maps.places.AutocompleteService()
-      })
+    loadPlaces(apiKey)
+      .then(lib => { libRef.current = lib })
       .catch(err => console.warn('Google Maps Places non disponibile:', err))
 
     navigator.geolocation?.getCurrentPosition(pos => {
@@ -36,23 +34,30 @@ export function usePlacesAutocomplete() {
 
   const search = useCallback((input) => {
     clearTimeout(debounceRef.current)
-    if (!input || input.length < 2 || !serviceRef.current) {
+    if (!input || input.length < 2 || !libRef.current) {
       setSuggestions([])
       return
     }
-    debounceRef.current = setTimeout(() => {
-      const request = { input, types: ['establishment'] }
-      if (locationRef.current && window.google?.maps) {
-        request.location = new window.google.maps.LatLng(
-          locationRef.current.lat,
-          locationRef.current.lng
-        )
-        request.radius = 2000
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const request = {
+          input,
+          includedPrimaryTypes: ['establishment'],
+          language: 'it',
+        }
+        if (locationRef.current) {
+          request.locationBias = {
+            center: locationRef.current,
+            radius: 2000,
+          }
+        }
+        const { suggestions: results } =
+          await libRef.current.AutocompleteSuggestion.fetchAutocompleteSuggestions(request)
+        setSuggestions(results ?? [])
+      } catch (e) {
+        console.warn('Autocomplete error:', e)
+        setSuggestions([])
       }
-      serviceRef.current.getPlacePredictions(request, (predictions, status) => {
-        const OK = window.google.maps.places.PlacesServiceStatus.OK
-        setSuggestions(status === OK && predictions ? predictions.slice(0, 5) : [])
-      })
     }, 300)
   }, [])
 

@@ -49,8 +49,9 @@ export default function AddExpenseForm({ categories, onSubmit, editingExpense, o
   }
 
   function selectSuggestion(pred) {
-    // main_text is the establishment name, secondary_text is the address
-    const placeName = pred.structured_formatting?.main_text ?? pred.description
+    const placeName = pred.placePrediction?.mainText?.toString()
+      ?? pred.structured_formatting?.main_text
+      ?? pred.description
     setName(placeName)
     clear()
   }
@@ -104,8 +105,12 @@ export default function AddExpenseForm({ categories, onSubmit, editingExpense, o
                 zIndex: 50, overflow: 'hidden',
               }}>
                 {suggestions.map((pred, i) => {
-                  const main = pred.structured_formatting?.main_text ?? pred.description
-                  const sub = pred.structured_formatting?.secondary_text ?? ''
+                  const main = pred.placePrediction?.mainText?.toString()
+                    ?? pred.structured_formatting?.main_text
+                    ?? pred.description
+                  const sub = pred.placePrediction?.secondaryText?.toString()
+                    ?? pred.structured_formatting?.secondary_text
+                    ?? ''
                   const isActive = i === activeIdx
                   return (
                     <div
