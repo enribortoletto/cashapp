@@ -96,7 +96,26 @@ export default function AddExpenseForm({ categories, onSubmit, editingExpense, o
               onChange={handleNameChange}
               onKeyDown={e => { handleNameKeyDown(e); if (e.key === 'Enter' && activeIdx < 0) handleSubmit() }}
               autoComplete="off"
+              style={{ paddingRight: name ? '2rem' : undefined }}
             />
+            {name && (
+              <button
+                type="button"
+                onMouseDown={e => { e.preventDefault(); setName(''); clear() }}
+                style={{
+                  position: 'absolute', right: '0.5rem', top: '50%', transform: 'translateY(-50%)',
+                  width: '1.25rem', height: '1.25rem', borderRadius: '50%',
+                  background: 'var(--text-2)', border: 'none', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: 'var(--surface)', fontSize: '0.625rem', fontWeight: 700,
+                  lineHeight: 1, padding: 0, opacity: 0.6, transition: 'opacity 0.15s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+                onMouseLeave={e => e.currentTarget.style.opacity = '0.6'}
+                tabIndex={-1}
+                aria-label="Cancella"
+              >✕</button>
+            )}
             {suggestions.length > 0 && (
               <div style={{
                 position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0,
