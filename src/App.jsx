@@ -21,6 +21,7 @@ export default function App() {
   // Data
   const [expenses, setExpenses] = useState([])        // for displayMonth
   const [categories, setCategories] = useState([])    // all user categories
+  const [usedCategoryNames, setUsedCategoryNames] = useState(new Set()) // categories with >=1 expense
   const [budget, setBudget] = useState(null)          // number or null
   const [budgetIsGlobal, setBudgetIsGlobal] = useState(false)
   const [recurring, setRecurring] = useState([])      // recurring templates
@@ -81,6 +82,7 @@ export default function App() {
     await Promise.all([
       loadExpenses(uid, months),
       loadCategories(uid),
+      loadUsedCategories(uid),
       loadBudget(uid, months[0]),
       loadRecurring(uid),
     ])
@@ -119,6 +121,14 @@ export default function App() {
       .eq('user_id', uid)
       .order('name')
     setCategories(data ?? [])
+  }
+
+  async function loadUsedCategories(uid) {
+    const { data } = await supabase
+      .from('expenses')
+      .select('category')
+      .eq('user_id', uid)
+    setUsedCategoryNames(new Set((data ?? []).map(e => e.category)))
   }
 
   async function loadBudget(uid, month) {
@@ -235,6 +245,7 @@ export default function App() {
       }
       setEditingExpense(null)
       showToast('Spesa aggiornata')
+      loadUsedCategories(uid)
     } else {
       // Insert new
       let recurringId = null
@@ -252,6 +263,7 @@ export default function App() {
         setExpenses(prev => [inserted, ...prev])
       }
       showToast('Spesa aggiunta')
+      loadUsedCategories(uid)
     }
   }
 
@@ -262,6 +274,7 @@ export default function App() {
     setExpenses(prev => prev.filter(e => e.id !== confirmExp.id))
     setConfirmExp(null)
     showToast('Spesa eliminata')
+    loadUsedCategories(user.id)
   }
 
   // ── BUDGET ────────────────────────────────────────────────────────
@@ -355,7 +368,7 @@ export default function App() {
         {/* Form */}
         <div className="rise-in" style={{ '--rise-delay': '0s' }}>
           <AddExpenseForm
-            categories={categories}
+            categories={categories.filter(c => usedCategoryNames.has(c.name))}
             onSubmit={handleExpenseSubmit}
             editingExpense={editingExpense}
             onCancelEdit={() => setEditingExpense(null)}
