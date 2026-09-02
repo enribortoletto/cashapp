@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react'
-import { isDarkMode } from '../lib/utils'
 
-export default function PieChart({ segments }) {
+export default function PieChart({ segments, size = 192 }) {
   const canvasRef = useRef(null)
   const animRef = useRef(null)
 
@@ -18,10 +17,6 @@ export default function PieChart({ segments }) {
     if (total === 0) { ctx.clearRect(0, 0, W, H); return }
 
     const dur = 650, t0 = performance.now()
-
-    function getSurface() {
-      return isDarkMode() ? '#16161A' : '#F8F7F5'
-    }
 
     function frame(now) {
       const p = Math.min((now - t0) / dur, 1)
@@ -43,17 +38,22 @@ export default function PieChart({ segments }) {
       }
 
       if (p > 0.6 && segments.length > 1) {
-        ctx.strokeStyle = getSurface(); ctx.lineWidth = 2
+        ctx.save()
+        ctx.globalCompositeOperation = 'destination-out'
+        ctx.strokeStyle = '#000'; ctx.lineWidth = 2
         let a = -Math.PI / 2
         for (const seg of segments) {
           ctx.beginPath(); ctx.moveTo(cx, cy)
           ctx.lineTo(cx + R * Math.cos(a), cy + R * Math.sin(a)); ctx.stroke()
           a += Math.PI * 2 * (seg.amt / total)
         }
+        ctx.restore()
       }
 
-      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2)
-      ctx.fillStyle = getSurface(); ctx.fill()
+      ctx.save()
+      ctx.globalCompositeOperation = 'destination-out'
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill()
+      ctx.restore()
 
       if (p < 1) animRef.current = requestAnimationFrame(frame)
       else animRef.current = null
@@ -62,7 +62,7 @@ export default function PieChart({ segments }) {
     if (animRef.current) cancelAnimationFrame(animRef.current)
     animRef.current = requestAnimationFrame(frame)
     return () => { if (animRef.current) cancelAnimationFrame(animRef.current) }
-  }, [segments])
+  }, [segments, size])
 
-  return <canvas ref={canvasRef} width={192} height={192} style={{ maxWidth: 192, maxHeight: 192 }} />
+  return <canvas ref={canvasRef} width={size} height={size} style={{ maxWidth: size, maxHeight: size }} />
 }

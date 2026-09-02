@@ -33,6 +33,42 @@ export function nextMonth(ym) {
   return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`
 }
 
+export function monthsInPeriod(ym, viewMode) {
+  const [y, m] = ym.split('-').map(Number)
+  if (viewMode === 'quarter') {
+    const qStart = Math.floor((m - 1) / 3) * 3 + 1
+    return [0, 1, 2].map(i => `${y}-${String(qStart + i).padStart(2, '0')}`)
+  }
+  if (viewMode === 'year') {
+    return Array.from({ length: 12 }, (_, i) => `${y}-${String(i + 1).padStart(2, '0')}`)
+  }
+  return [ym]
+}
+
+export function periodLabel(ym, viewMode) {
+  const [y, m] = ym.split('-').map(Number)
+  if (viewMode === 'quarter') {
+    const qStart = Math.floor((m - 1) / 3) * 3
+    return `${MESI[qStart]} - ${MESI[qStart + 2]} ${y}`
+  }
+  if (viewMode === 'year') return `${y}`
+  return monthLabel(ym)
+}
+
+export function prevPeriod(ym, viewMode) {
+  const steps = viewMode === 'quarter' ? 3 : viewMode === 'year' ? 12 : 1
+  let cur = ym
+  for (let i = 0; i < steps; i++) cur = prevMonth(cur)
+  return cur
+}
+
+export function nextPeriod(ym, viewMode) {
+  const steps = viewMode === 'quarter' ? 3 : viewMode === 'year' ? 12 : 1
+  let cur = ym
+  for (let i = 0; i < steps; i++) cur = nextMonth(cur)
+  return cur
+}
+
 export function fmt(n) {
   return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(n ?? 0)
 }

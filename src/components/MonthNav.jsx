@@ -1,15 +1,18 @@
-import { monthLabel } from '../lib/utils'
+import { ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react'
 
-export default function MonthNav({ month, onPrev, onNext }) {
+export default function MonthNav({ label, onPrev, onNext, onToday, isCurrent }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.625rem' }}>
-      <NavBtn onClick={onPrev} label="Mese precedente">‹</NavBtn>
+      <NavBtn onClick={onPrev} label="Periodo precedente"><ChevronLeft size={18} strokeWidth={2} /></NavBtn>
       <span style={{
         flex: 1, textAlign: 'center', fontWeight: 600, fontSize: '1rem', letterSpacing: '-0.01em'
       }}>
-        {monthLabel(month)}
+        {label}
       </span>
-      <NavBtn onClick={onNext} label="Mese successivo">›</NavBtn>
+      {!isCurrent && (
+        <NavBtn onClick={onToday} label="Vai al periodo corrente"><CalendarDays size={17} strokeWidth={2} /></NavBtn>
+      )}
+      <NavBtn onClick={onNext} label="Periodo successivo"><ChevronRight size={18} strokeWidth={2} /></NavBtn>
     </div>
   )
 }

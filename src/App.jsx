@@ -1,15 +1,18 @@
 import { useState, useEffect, useCallback } from 'react'
+import { SunMedium, Moon, CircleDot, LogOut } from 'lucide-react'
 import { supabase } from './lib/supabase'
-import { todayMonth, todayDay, prevMonth, nextMonth, fmt, CAT_PALETTE, monthLabel } from './lib/utils'
+import { todayMonth, fmt, CAT_PALETTE, monthsInPeriod, periodLabel, prevPeriod, nextPeriod } from './lib/utils'
 import AuthPage from './components/AuthPage'
 import AddExpenseForm from './components/AddExpenseForm'
 import MonthNav from './components/MonthNav'
+import ViewModeToggle from './components/ViewModeToggle'
 import BudgetCard from './components/BudgetCard'
 import TotalCard from './components/TotalCard'
 import DetailModal from './components/DetailModal'
 import ConfirmDialog from './components/ConfirmDialog'
 import ExportModal from './components/ExportModal'
 import Toast from './components/Toast'
+import EmptyState from './components/EmptyState'
 
 export default function App() {
   const [user, setUser] = useState(null)
@@ -24,6 +27,7 @@ export default function App() {
 
   // UI
   const [displayMonth, setDisplayMonth] = useState(todayMonth())
+  const [viewMode, setViewMode] = useState(() => localStorage.getItem('spese_viewmode') ?? 'month')
   const [theme, setTheme] = useState(() => localStorage.getItem('spese_theme') ?? 'system')
   const [loading, setLoading] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
@@ -53,41 +57,57 @@ export default function App() {
     localStorage.setItem('spese_theme', theme)
   }, [theme])
 
+  useEffect(() => {
+    localStorage.setItem('spese_viewmode', viewMode)
+  }, [viewMode])
+
   function cycleTheme() {
     setTheme(t => ({ system: 'light', light: 'dark', dark: 'system' }[t] ?? 'system'))
   }
 
-  const themeIcon = { system: '◑', light: '☀', dark: '☾' }[theme] ?? '◑'
+  const ThemeIcon = { system: CircleDot, light: SunMedium, dark: Moon }[theme] ?? CircleDot
+
+  function greeting() {
+    const h = new Date().getHours()
+    if (h < 6) return 'Buonanotte'
+    if (h < 12) return 'Buongiorno'
+    if (h < 18) return 'Buon pomeriggio'
+    return 'Buonasera'
+  }
 
   // ── LOAD DATA ─────────────────────────────────────────────────────
-  const loadAll = useCallback(async (uid, month) => {
+  const loadAll = useCallback(async (uid, months) => {
     setLoading(true)
     await Promise.all([
-      loadExpenses(uid, month),
+      loadExpenses(uid, months),
       loadCategories(uid),
-      loadBudget(uid, month),
+      loadBudget(uid, months[0]),
       loadRecurring(uid),
     ])
     setLoading(false)
   }, [])
 
+  const periodMonths = monthsInPeriod(displayMonth, viewMode)
+
   useEffect(() => {
     if (!user) return
-    loadAll(user.id, displayMonth)
-  }, [user, displayMonth, loadAll])
+    loadAll(user.id, periodMonths)
+  }, [user, displayMonth, viewMode, loadAll])
 
-  // After recurring loads, init the month if needed
+  // After recurring loads, init each month in the period if needed
   useEffect(() => {
     if (!user || !recurring.length) return
-    initMonthRecurring(user.id, displayMonth)
-  }, [user, displayMonth, recurring])
+    ;(async () => {
+      for (const m of periodMonths) await initMonthRecurring(user.id, m)
+    })()
+  }, [user, displayMonth, viewMode, recurring])
 
-  async function loadExpenses(uid, month) {
+  async function loadExpenses(uid, months) {
     const { data } = await supabase
       .from('expenses')
       .select('*')
       .eq('user_id', uid)
-      .eq('month', month)
+      .in('month', months)
       .order('day', { ascending: false })
     setExpenses(data ?? [])
   }
@@ -210,7 +230,7 @@ export default function App() {
       if (updated) {
         setExpenses(prev => {
           const filtered = prev.filter(e => e.id !== old.id)
-          return expMonth === displayMonth ? [...filtered, updated] : filtered
+          return periodMonths.includes(expMonth) ? [...filtered, updated] : filtered
         })
       }
       setEditingExpense(null)
@@ -228,7 +248,7 @@ export default function App() {
         .insert({ user_id: uid, name, amount, category, note, month: expMonth, day, recurring: isRecurring, recurring_id: recurringId })
         .select().single()
 
-      if (inserted && expMonth === displayMonth) {
+      if (inserted && periodMonths.includes(expMonth)) {
         setExpenses(prev => [inserted, ...prev])
       }
       showToast('Spesa aggiunta')
@@ -279,20 +299,18 @@ export default function App() {
     showToast('Budget eliminato')
   }
 
-  // ── MONTH NAVIGATION ──────────────────────────────────────────────
-  function goToPrev() { setDisplayMonth(m => prevMonth(m)) }
-  function goToNext() { setDisplayMonth(m => nextMonth(m)) }
+  // ── PERIOD NAVIGATION ─────────────────────────────────────────────
+  function goToPrev() { setDisplayMonth(m => prevPeriod(m, viewMode)) }
+  function goToNext() { setDisplayMonth(m => nextPeriod(m, viewMode)) }
+  function goToToday() { setDisplayMonth(todayMonth()) }
+  const isCurrentPeriod = periodMonths.includes(todayMonth())
 
   // ── EXPORT ────────────────────────────────────────────────────────
-  function handleExport(type) {
-    if (type === 'csv') {
-      const rows = [['Giorno','Nome','Categoria','Importo','Nota','Ricorrente']]
-      expenses.forEach(e => rows.push([e.day ?? 1, e.name, e.category, e.amount, e.note ?? '', e.recurring ? 'Si' : 'No']))
-      const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\r\n')
-      setExportState({ title: `CSV – ${monthLabel(displayMonth)}`, content: csv })
-    } else {
-      setExportState({ title: `JSON – ${monthLabel(displayMonth)}`, content: JSON.stringify(expenses, null, 2) })
-    }
+  function handleExport() {
+    const rows = [['Mese','Giorno','Nome','Categoria','Importo','Nota','Ricorrente']]
+    expenses.forEach(e => rows.push([e.month, e.day ?? 1, e.name, e.category, e.amount, e.note ?? '', e.recurring ? 'Si' : 'No']))
+    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\r\n')
+    setExportState({ title: `CSV – ${periodLabel(displayMonth, viewMode)}`, content: csv })
   }
 
   // ── TOAST ─────────────────────────────────────────────────────────
@@ -300,6 +318,12 @@ export default function App() {
 
   // ── COMPUTED ──────────────────────────────────────────────────────
   const total = expenses.reduce((s, e) => s + Number(e.amount), 0)
+  const catColorMap = Object.fromEntries(categories.map(c => [c.name, c.color]))
+  const catTotals = {}
+  expenses.forEach(e => { catTotals[e.category] = (catTotals[e.category] ?? 0) + Number(e.amount) })
+  const totalSegments = Object.entries(catTotals)
+    .sort((a, b) => b[1] - a[1])
+    .map(([cat, amt]) => ({ cat, amt, color: catColorMap[cat] ?? '#888' }))
 
   // ── RENDER ────────────────────────────────────────────────────────
   if (!authReady) return null
@@ -310,38 +334,70 @@ export default function App() {
     <>
       <div style={{ maxWidth: 520, margin: '0 auto', padding: '0 1rem', paddingBottom: '3rem' }}>
         {/* Header */}
-        <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.25rem 0 1rem' }}>
-          <div style={{ fontWeight: 700, fontSize: '1.0625rem', letterSpacing: '-0.03em' }}>
-            spese<span style={{ color: 'var(--accent)' }}>.</span>
+        <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.25rem 0 1.25rem' }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: '1.0625rem', letterSpacing: '-0.03em' }}>
+              spese<span style={{
+                background: 'var(--grad-accent)', WebkitBackgroundClip: 'text', backgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+              }}>.</span>
+            </div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-2)', marginTop: '0.1rem' }}>
+              {greeting()}
+            </div>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <HeaderBtn onClick={cycleTheme} aria-label="Cambia tema" title="Cambia tema">{themeIcon}</HeaderBtn>
-            <HeaderBtn onClick={() => supabase.auth.signOut()} aria-label="Esci" title="Esci">⎋</HeaderBtn>
+            <HeaderBtn onClick={cycleTheme} aria-label="Cambia tema" title="Cambia tema"><ThemeIcon size={16} strokeWidth={2} /></HeaderBtn>
+            <HeaderBtn onClick={() => supabase.auth.signOut()} aria-label="Esci" title="Esci"><LogOut size={16} strokeWidth={2} /></HeaderBtn>
           </div>
         </header>
 
         {/* Form */}
-        <AddExpenseForm
-          categories={categories}
-          onSubmit={handleExpenseSubmit}
-          editingExpense={editingExpense}
-          onCancelEdit={() => setEditingExpense(null)}
-        />
+        <div className="rise-in" style={{ '--rise-delay': '0s' }}>
+          <AddExpenseForm
+            categories={categories}
+            onSubmit={handleExpenseSubmit}
+            editingExpense={editingExpense}
+            onCancelEdit={() => setEditingExpense(null)}
+          />
+        </div>
 
-        {/* Month nav */}
-        <MonthNav month={displayMonth} onPrev={goToPrev} onNext={goToNext} />
+        {/* View mode + period nav */}
+        <div className="rise-in" style={{ '--rise-delay': '0.05s' }}>
+          <ViewModeToggle value={viewMode} onChange={setViewMode} />
+          <MonthNav label={periodLabel(displayMonth, viewMode)} onPrev={goToPrev} onNext={goToNext} onToday={goToToday} isCurrent={isCurrentPeriod} />
+        </div>
 
-        {/* Budget */}
-        <BudgetCard budget={budget} spent={total} isGlobal={budgetIsGlobal} onSave={handleBudgetSave} onDelete={handleBudgetDelete} />
+        {loading && !expenses.length ? (
+          <>
+            <div className="skeleton" style={{ height: 92, marginBottom: '0.75rem' }} />
+            <div className="skeleton" style={{ height: 92 }} />
+          </>
+        ) : (
+          <>
+            {/* Budget (solo vista mensile) */}
+            {viewMode === 'month' && (
+              <div className="rise-in" style={{ '--rise-delay': '0.1s' }}>
+                <BudgetCard budget={budget} spent={total} isGlobal={budgetIsGlobal} onSave={handleBudgetSave} onDelete={handleBudgetDelete} />
+              </div>
+            )}
 
-        {/* Total */}
-        <TotalCard total={total} count={expenses.length} onClick={() => setModalOpen(true)} />
+            {/* Total / empty state */}
+            <div className="rise-in" style={{ '--rise-delay': '0.15s' }}>
+              {expenses.length === 0 ? (
+                <EmptyState />
+              ) : (
+                <TotalCard total={total} count={expenses.length} segments={totalSegments} onClick={() => setModalOpen(true)} viewMode={viewMode} />
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Detail modal */}
       <DetailModal
         open={modalOpen}
-        month={displayMonth}
+        periodLabel={periodLabel(displayMonth, viewMode)}
         expenses={expenses}
         categories={categories}
         onClose={() => setModalOpen(false)}

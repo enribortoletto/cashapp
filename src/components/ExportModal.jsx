@@ -1,3 +1,5 @@
+import { X } from 'lucide-react'
+
 export default function ExportModal({ open, title, content, onClose }) {
   function copy() {
     if (navigator.clipboard) {
@@ -6,6 +8,16 @@ export default function ExportModal({ open, title, content, onClose }) {
       const ta = document.getElementById('export-ta')
       ta.select(); document.execCommand('copy')
     }
+  }
+
+  function download() {
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${title.replace(/[^a-z0-9]+/gi, '_')}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   return (
@@ -21,7 +33,7 @@ export default function ExportModal({ open, title, content, onClose }) {
             width: 32, height: 32, borderRadius: '50%', background: 'var(--surface-2)',
             color: 'var(--text-2)', fontSize: '1.125rem', display: 'flex', alignItems: 'center',
             justifyContent: 'center', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-          }}>×</button>
+          }}><X size={16} strokeWidth={2} /></button>
         </div>
         <textarea id="export-ta" readOnly value={content} style={{
           fontFamily: 'var(--font-mono)', fontSize: '0.75rem',
@@ -29,11 +41,18 @@ export default function ExportModal({ open, title, content, onClose }) {
           padding: '0.625rem', height: 200, resize: 'none', width: '100%',
           color: 'var(--text)', overflowX: 'auto', whiteSpace: 'pre', outline: 'none',
         }} />
-        <button onClick={copy} style={{
-          padding: '0.625rem', background: 'var(--accent)', color: '#fff',
-          border: 'none', borderRadius: 'var(--radius-sm)',
-          fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-        }}>Copia negli appunti</button>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button onClick={copy} style={{
+            flex: 1, padding: '0.625rem', background: 'var(--accent)', color: '#fff',
+            border: 'none', borderRadius: 'var(--radius-sm)',
+            fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+          }}>Copia negli appunti</button>
+          <button onClick={download} style={{
+            flex: 1, padding: '0.625rem', background: 'var(--surface-2)', color: 'var(--text)',
+            border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)',
+            fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+          }}>Scarica CSV</button>
+        </div>
       </div>
     </div>
   )

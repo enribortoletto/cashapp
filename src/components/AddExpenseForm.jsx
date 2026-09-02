@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
-import { todayMonth } from '../lib/utils'
+import { X } from 'lucide-react'
+import { todayMonth, monthLabel } from '../lib/utils'
 import { usePlacesAutocomplete } from '../hooks/usePlacesAutocomplete'
 
 export default function AddExpenseForm({ categories, onSubmit, editingExpense, onCancelEdit }) {
   const [name, setName] = useState('')
   const [amount, setAmount] = useState('')
   const [category, setCategory] = useState('')
-  const [note, setNote] = useState('')
   const [month, setMonth] = useState(todayMonth())
   const [recurring, setRecurring] = useState(false)
   const [activeIdx, setActiveIdx] = useState(-1)
@@ -19,7 +19,6 @@ export default function AddExpenseForm({ categories, onSubmit, editingExpense, o
       setName(editingExpense.name)
       setAmount(String(editingExpense.amount))
       setCategory(editingExpense.category)
-      setNote(editingExpense.note ?? '')
       setMonth(editingExpense.month)
       setRecurring(editingExpense.recurring ?? false)
     } else {
@@ -37,7 +36,7 @@ export default function AddExpenseForm({ categories, onSubmit, editingExpense, o
   }, [clear])
 
   function reset() {
-    setName(''); setAmount(''); setCategory(''); setNote('')
+    setName(''); setAmount(''); setCategory('')
     setMonth(todayMonth()); setRecurring(false); clear()
   }
 
@@ -74,7 +73,7 @@ export default function AddExpenseForm({ categories, onSubmit, editingExpense, o
 
   function handleSubmit() {
     if (!name.trim() || !amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0 || !category.trim()) return
-    onSubmit({ name: name.trim(), amount: parseFloat(amount), category: category.trim(), note: note.trim(), month, recurring })
+    onSubmit({ name: name.trim(), amount: parseFloat(amount), category: category.trim(), note: '', month, recurring })
     if (!editingExpense) reset()
   }
 
@@ -83,9 +82,28 @@ export default function AddExpenseForm({ categories, onSubmit, editingExpense, o
   return (
     <div className="card p-4 mb-3" style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
 
-      {/* Row 1: name (with autocomplete) + amount */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '0.625rem', alignItems: 'start' }}>
-        {/* Name with Places dropdown */}
+      {/* Amount – big, centered, full width */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '0.375rem 0 0.75rem' }}>
+        <label className="label-eyebrow" style={{ marginBottom: '0.375rem' }}>Inserisci l'importo (€)</label>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', width: '100%' }}>
+          <input
+            type="number" inputMode="decimal" placeholder="0,00" min="0" step="0.01"
+            value={amount} onChange={e => setAmount(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+            className="amount-input-big"
+            style={{
+              fontFamily: 'var(--font-mono)', fontSize: '2.75rem', fontWeight: 600,
+              textAlign: 'center', background: 'transparent', border: 'none', outline: 'none',
+              color: 'var(--text)', width: '100%', maxWidth: 220, padding: 0,
+              fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em',
+              appearance: 'textfield', MozAppearance: 'textfield',
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Row: name (with autocomplete) + category */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.625rem' }}>
         <Field label="Nome spesa">
           <div style={{ position: 'relative' }} ref={wrapperRef}>
             <input
@@ -114,7 +132,7 @@ export default function AddExpenseForm({ categories, onSubmit, editingExpense, o
                 onMouseLeave={e => e.currentTarget.style.opacity = '0.6'}
                 tabIndex={-1}
                 aria-label="Cancella"
-              >✕</button>
+              ><X size={11} strokeWidth={3} /></button>
             )}
             {suggestions.length > 0 && (
               <div style={{
@@ -157,18 +175,6 @@ export default function AddExpenseForm({ categories, onSubmit, editingExpense, o
           </div>
         </Field>
 
-        <Field label="Importo">
-          <div className="amount-wrap">
-            <span className="amount-prefix">€</span>
-            <input className="input-base" type="number" placeholder="0,00" min="0" step="0.01"
-              inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSubmit()} />
-          </div>
-        </Field>
-      </div>
-
-      {/* Row 2: category + note */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.625rem' }}>
         <Field label="Categoria">
           <input className="input-base" type="text" list="cat-datalist"
             placeholder="Seleziona o nuova…" value={category}
@@ -179,18 +185,22 @@ export default function AddExpenseForm({ categories, onSubmit, editingExpense, o
             {categories.map(c => <option key={c.name} value={c.name} />)}
           </datalist>
         </Field>
-        <Field label="Nota">
-          <input className="input-base" type="text" placeholder="Opzionale"
-            value={note} onChange={e => setNote(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-            autoComplete="off" />
-        </Field>
       </div>
 
-      {/* Row 3: month + recurring */}
+      {/* Row: month + recurring */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.625rem' }}>
         <Field label="Mese" style={{ flex: 1 }}>
-          <input className="input-base" type="month" value={month} onChange={e => setMonth(e.target.value)} />
+          <div style={{ position: 'relative' }}>
+            <input className="input-base" type="month" lang="it" value={month}
+              onChange={e => setMonth(e.target.value)}
+              style={{ color: 'transparent' }} />
+            <span style={{
+              position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)',
+              pointerEvents: 'none', fontSize: '0.9375rem', color: 'var(--text)',
+            }}>
+              {monthLabel(month)}
+            </span>
+          </div>
         </Field>
         <div style={{ paddingTop: '1.125rem', flexShrink: 0 }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
